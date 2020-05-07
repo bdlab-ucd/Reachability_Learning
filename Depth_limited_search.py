@@ -377,6 +377,39 @@ def dfs_edges(G, source=None, depth_limit=None):
             except StopIteration:
                 stack.pop()
 
+
+def bfs_edges(G, source, reverse=False, depth_limit=None):
+     
+    if reverse and G.is_directed():
+        successors = G.predecessors
+    else:
+        successors = G.neighbors
+    # TODO In Python 3.3+, this should be `yield from ...`
+    for e in generic_bfs_edges(G, source, successors, depth_limit):
+        return e
+
+def generic_bfs_edges(G, source, neighbors=None, depth_limit=None):
+    visited = {source}
+    if depth_limit is None:
+        depth_limit = len(G)
+    queue = deque([(source, depth_limit, neighbors(source))])
+    while queue:
+        parent, depth_now, children = queue[0]
+        try:
+            child = next(children)
+            if child not in visited:
+                yield parent, child
+                visited.add(child)
+                if depth_now > 1:
+                    queue.append((child, depth_now - 1, neighbors(child)))
+        except StopIteration:
+            queue.popleft()def bfs_tree(G, source, reverse=False, depth_limit=None):
+   
+    T = nx.DiGraph()
+    T.add_node(source)
+    edges_gen = bfs_edges(G, source, reverse=reverse, depth_limit=depth_limit)
+    T.add_edges_from(edges_gen)
+    return T
 ######Matrix Completion
 
  
