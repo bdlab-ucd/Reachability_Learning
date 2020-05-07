@@ -46,16 +46,16 @@ source_node=5
 num_traverse=2
 bfs_list=[]
 sources=[5,3406,3,10,16]
-
-
+backbone=False
+jump_prob=.2
+burning_prob=.4
 ##### input dataset
-#g = nx.read_edgelist('./atp/dataset/government_edges.csv', delimiter=',',nodetype = int, create_using = nx.DiGraph())
 time_start = time.perf_counter()
 
 
 g = nx.read_edgelist("./atp/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
 
-#nx.is_directed_acyclic_graph(g)
+
 num_edges=g.number_of_edges()
 num_nodes=g.number_of_nodes()
 
@@ -93,7 +93,7 @@ def dfs_pred(visited, graph, node,query_budget ):
         dfs_pred(visited, graph, selected,query_budget)
 
 visited = set() # Set to keep track of visited nodes.
-dfs_pred(visited,g,5,query_budget)
+dfs_pred(visited,g,source_node,query_budget)
 dfs_predecessor=visited
 
 #to verify high degree nodes
@@ -109,20 +109,7 @@ dfs_depth=sorted(list(nx.dfs_tree(g, source=source_node, depth_limit=depth_limit
 bfs_depth=sorted(list(nx.bfs_tree(g, source=source_node, depth_limit=depth_limit_search).edges()))
 
 
-reach=sps.csr_matrix((num_nodes, num_nodes), dtype=np.int8)
-for i in range(num_traverse):
-    bfs_depth=sorted(list(nx.bfs_tree(g, source=sources[i], depth_limit=depth_limit_search).edges()))
-    bfs_list.append(bfs_depth)
 
-merged = list(itertools.chain(*bfs_list))
-
-count=0
-for (i,j) in merged:
-    if count<query_budget:
-        reach[i,j]=1
-        count=count+1
-    else:
-        break
 
 ## extract min vertex cover
 reach_minVertex=sps.csr_matrix((num_nodes, num_nodes), dtype=np.int8)
@@ -136,16 +123,34 @@ while count<query_budget:
             reach_minVertex[i,j]=1
             count=count+1
            
+if not backbone:
+    for i in range(num_traverse):
+        bfs_depth=sorted(list(nx.bfs_tree(g, source=sources[i], depth_limit=depth_limit_search).edges()))
+        bfs_list.append(bfs_depth)
+else: 
+    for i in range(num_traverse):
+        bfs_depth=sorted(list(nx.bfs_tree(g, source=min_vertex[i], depth_limit=depth_limit_search).edges()))
+        bfs_list.append(bfs_depth)
 
+merged = list(itertools.chain(*bfs_list))
+
+reach=sps.csr_matrix((num_nodes, num_nodes), dtype=np.int8)
+count=0
+for (i,j) in merged:
+    if count<query_budget:
+        reach[i,j]=1
+        count=count+1
+    else:
+        break
 
 ## Random walk with jump
 object2=Graph_Sampling.SRW_RWF_ISRW()
-sample2= object2.random_walk_sampling_with_fly_back(g,query_budget,0.2)
+sample2= object2.random_walk_sampling_with_fly_back(g,query_budget,jump_prob)
 random_jump=sample2.edges()
 
 ## Forest Fore 
 object4=Graph_Sampling.ForestFire()
-sample4 = object4.forestfire(g,query_budget) 
+sample4 = object4.forestfire(g,query_budget,burning_prob) 
 FF=sample4.edges()
 
 #merged=FF
@@ -332,6 +337,45 @@ def has_path(g,i,j):
     bfs_nodes=bfs(g,i)
     if j in bfs_nodes:
         return True
+
+
+def dfs_tree(G, source=None, depth_limit=None):
+  
+    T = nx.DiGraph()
+    if source is None:
+        T.add_nodes_from(G)
+    else:
+        T.add_node(source)
+    T.add_edges_from(dfs_edges(G, source, depth_limit))
+    return T
+
+def dfs_edges(G, source=None, depth_limit=None):
+    
+    if source is None:
+        # edges for all components
+        nodes = G
+    else:
+        # edges for components with source
+        nodes = [source]
+    visited = set()
+    if depth_limit is None:
+        depth_limit = len(G)
+    for start in nodes:
+        if start in visited:
+            continue
+        visited.add(start)
+        stack = [(start, depth_limit, iter(G[start]))]
+        while stack:
+            parent, depth_now, children = stack[-1]
+            try:
+                child = next(children)
+                if child not in visited:
+                    yield parent, child
+                    visited.add(child)
+                    if depth_now > 1:
+                        stack.append((child, depth_now - 1, iter(G[child])))
+            except StopIteration:
+                stack.pop()
 
 ######Matrix Completion
 
