@@ -55,6 +55,7 @@ time_start = time.perf_counter()
 
 g = nx.read_edgelist("./atp/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
 
+g = nx.karate_club_graph()
 
 num_edges=g.number_of_edges()
 num_nodes=g.number_of_nodes()
@@ -88,9 +89,13 @@ def dfs_pred(visited, graph, node,query_budget ):
         print (node)
         visited.add(node)
         neighbour=list(g.neighbors(node))
-        print(neighbour)
-        selected=select_pred(neighbour)
-        dfs_pred(visited, graph, selected,query_budget)
+        if not neighbour:
+            random_node = random.randint(1,num_nodes)
+            dfs_pred(visited, graph, random_node,query_budget)
+        else:
+            print(neighbour)
+            selected=select_pred(neighbour)
+            dfs_pred(visited, graph, selected,query_budget)
 
 visited = set() # Set to keep track of visited nodes.
 dfs_pred(visited,g,source_node,query_budget)
@@ -143,6 +148,9 @@ for (i,j) in merged:
     else:
         break
 
+for (i,j) in list(g.edges):
+        reach[i,j]=1
+        
 ## Random walk with jump
 object2=Graph_Sampling.SRW_RWF_ISRW()
 sample2= object2.random_walk_sampling_with_fly_back(g,query_budget,jump_prob)
@@ -164,12 +172,25 @@ for i in merged:
         j=j+1
 
 
-model = NMF(n_components= rank, init='random', random_state=0)
-W1 = model.fit_transform(reach_jump)
+model = NMF(n_components= 2, init='random', random_state=0)
+W1 = model.fit_transform(reach)
 H1 = model.components_
 
+import matplotlib.pyplot as plt
+plt.style.use('seaborn-whitegrid')
+plt.scatter(W1[:,0], W1[:,1], marker='o');
 
 
+y = list(W1[:,0])
+z = list(W1[:,1])
+n = list(range(0,33))
+
+fig, ax = plt.subplots()
+ax.scatter(z, y)
+
+for i, txt in enumerate(n):
+    ax.annotate(txt, (z[i], y[i]))
+    ax.annotate(txt, (z,y))
 pos={}
 neg={}
 
@@ -181,8 +202,8 @@ path_neg=[]
 path_neg_test=[] 
 path_pos_test=[]
 
-train_size=query_budget/2
-test_size=1000
+train_size=query_budget/5
+test_size=500
 
 
 def add_label(path_pos,path_neg):
