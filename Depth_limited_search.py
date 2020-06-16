@@ -16,6 +16,8 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import Normalizer
+from sklearn import decomposition, datasets, model_selection, preprocessing, metrics
+
 from numpy import *
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
@@ -45,25 +47,28 @@ depth_limit_search=3
 source_node=5
 num_traverse=2
 bfs_list=[]
+dfs_list=[]
 sources=[5,3406,3,10,16]
-backbone=False
+backbone=True
 jump_prob=.2
 burning_prob=.4
 ##### input dataset
 time_start = time.perf_counter()
 
 
-g = nx.read_edgelist("./atp/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
+g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
 
-g = nx.karate_club_graph()
+#g = nx.karate_club_graph()
 
 num_edges=g.number_of_edges()
 num_nodes=g.number_of_nodes()
 
+print("number of nodes: {}".format(num_nodes) )
 
+print("number of edges: {}".format(num_edges) )
 ##search based on the predecessors
 
-pred=nx.predecessor(g,source=source_node)
+pred=nx.predecessor(g,source=5)
 def select_pred(neigbours):
     max_pred=0
     for i in neigbours:
@@ -90,16 +95,35 @@ def dfs_pred(visited, graph, node,query_budget ):
         visited.add(node)
         neighbour=list(g.neighbors(node))
         if not neighbour:
+            print("not neigbour")
             random_node = random.randint(1,num_nodes)
             dfs_pred(visited, graph, random_node,query_budget)
         else:
             print(neighbour)
-            selected=select_pred(neighbour)
-            dfs_pred(visited, graph, selected,query_budget)
+            selected=sorted_pred(neighbour)
+            for s in selected:
+                dfs_pred(visited, graph, s,query_budget)
 
-visited = set() # Set to keep track of visited nodes.
-dfs_pred(visited,g,source_node,query_budget)
-dfs_predecessor=visited
+
+
+def dfs( start):
+    visited, stack = set(), [start]
+    while stack and len(visited)<query_budget:
+        print(len(visited))
+        vertex = stack.pop()
+        if vertex not in visited:
+            visited.add(vertex)
+            
+            unvisited=set(g.nodes) - visited
+            #removable=[x for x in unvisited if x not in list(pred.keys())]
+            
+            selected=sorted_pred(unvisited)
+           
+            stack.extend(selected)
+    return visited
+
+
+dfs_predecessor=dfs(5)
 
 #to verify high degree nodes
 #high_degree=sorted(g.degree, key=lambda x: x[1], reverse=True)
@@ -107,7 +131,7 @@ dfs_predecessor=visited
 
 
 ## dfs (multiple DFS with depth)
-dfs_depth=sorted(list(nx.dfs_tree(g, source=source_node, depth_limit=depth_limit_search).edges()))
+dfs_depth=sorted(list(nx.dfs_tree(g, source=source_node, depth_limit=3).edges()))
 
 
 ## bfs (multiple BFS with depth)
@@ -117,7 +141,7 @@ bfs_depth=sorted(list(nx.bfs_tree(g, source=source_node, depth_limit=depth_limit
 
 
 ## extract min vertex cover
-reach_minVertex=sps.csr_matrix((num_nodes, num_nodes), dtype=np.int8)
+reach_minVertex=sps.lil_matrix((num_nodes, num_nodes), dtype=np.int8)
             
 min_vertex=min_weighted_vertex_cover(g)
 count=0
@@ -139,7 +163,18 @@ else:
 
 merged = list(itertools.chain(*bfs_list))
 
-reach=sps.csr_matrix((num_nodes, num_nodes), dtype=np.int8)
+if not backbone:
+    for i in range(num_traverse):
+        dfs_depth=sorted(list(nx.bfs_tree(g, source=sources[i], depth_limit=depth_limit_search).edges()))
+        dfs_list.append(bfs_depth)
+else: 
+    for i in range(num_traverse):
+        dfs_depth=sorted(list(nx.bfs_tree(g, source=min_vertex[i], depth_limit=depth_limit_search).edges()))
+        dfs_list.append(bfs_depth)
+
+merged_dfs = list(itertools.chain(*dfs_list))
+
+reach=sps.lil_matrix((num_nodes, num_nodes), dtype=np.int8)
 count=0
 for (i,j) in merged:
     if count<query_budget:
@@ -152,51 +187,82 @@ for (i,j) in list(g.edges):
         reach[i,j]=1
         
 ## Random walk with jump
+       
 object2=Graph_Sampling.SRW_RWF_ISRW()
 sample2= object2.random_walk_sampling_with_fly_back(g,query_budget,jump_prob)
 random_jump=sample2.edges()
 
 ## Forest Fore 
 object4=Graph_Sampling.ForestFire()
-sample4 = object4.forestfire(g,query_budget,burning_prob) 
+sample4 = object4.forestfire(g,query_budget) 
 FF=sample4.edges()
 
-#merged=FF
-merged=random_jump
+merged=FF
+reach_FF=sps.lil_matrix((num_nodes, num_nodes), dtype=np.int8)
+#merged=random_jump
             
-reach_jump=sps.csr_matrix((num_nodes, num_nodes), dtype=np.int8)
+#reach_jump=sps.lil_matrix((num_nodes, num_nodes), dtype=np.int8)
 j=0
 for i in merged:
     if j<query_budget:
-        reach_jump[i[0],i[1]]=1
+        reach_FF[i[0],i[1]]=1
         j=j+1
 
-
-model = NMF(n_components= 2, init='random', random_state=0)
+#def getResult(X_train,X_test , rank):
+#reach_minVertex        
+model = NMF(n_components= rank, init='random', random_state=0)
 W1 = model.fit_transform(reach)
 H1 = model.components_
+                       
+HT=np.transpose(H1)
 
-import matplotlib.pyplot as plt
-plt.style.use('seaborn-whitegrid')
-plt.scatter(W1[:,0], W1[:,1], marker='o');
+test_size=int(num_nodes*0.2)
+reach_test=sps.lil_matrix((test_size, num_nodes), dtype=np.int8)
+
+count=0
+while count<test_size/2:
+      x=random.randint(0,test_size-1)
+      y=random.randint(0,test_size-1)
+      if g.has_node(x) and g.has_node(y): 
+          if (x,y) not in merged and has_path(g,x,y):
+              reach_test[[x],[y]]=1 
+              count=count+1
+              
+nzeroo=np.argwhere(reach != 0)
+
+reach_minVertex
+count=0
+while count<test_size/2:
+      x=random.randint(0,test_size-1)
+      y=random.randint(0,test_size-1)
+      if  g.has_node(x) and g.has_node(y): 
+          if [[x],[y]] not in nzeroo:
+              reach_test[[x],[y]]=1 
+              count=count+1              
+          
+          
+#X_train, X_test = model_selection.train_test_split(reach, test_size=0.2, random_state=1)
 
 
-y = list(W1[:,0])
-z = list(W1[:,1])
-n = list(range(0,33))
+def get_score(model, data, scorer=metrics.explained_variance_score):
+    """ Estimate performance of the model on the data """
+    prediction = model.inverse_transform(model.transform(data))
+    return scorer(data, prediction)
 
-fig, ax = plt.subplots()
-ax.scatter(z, y)
+print('test set performance')
+nmf = decomposition.NMF(n_components=rank).fit(reach)
 
-for i, txt in enumerate(n):
-    ax.annotate(txt, (z[i], y[i]))
-    ax.annotate(txt, (z,y))
+reach_test_dense=reach_test.toarray()
+print(get_score(nmf, reach_test_dense))
+
+
+
+
+
+################# predict paths
 pos={}
 neg={}
 
-            
-            
-HT=np.transpose(H1)
 path_pos=[]
 path_neg=[]
 path_neg_test=[] 
