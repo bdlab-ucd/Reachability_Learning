@@ -87,7 +87,7 @@ class ExplicitMF():
         called multiple times for further training.
         """
         ctr = 1
-        while ctr <= n_iter:
+        while ctr <= n_iter and self.user_vecs.shape[0]<query_budget:
             if ctr % 10 == 0 and self._v:
                 print ('\tcurrent iteration: {}'.format(ctr))
             self.user_vecs = self.als_step(self.user_vecs, 
@@ -101,6 +101,7 @@ class ExplicitMF():
                                            self.item_reg, 
                                            type='item')
             ctr += 1
+            
     
     def predict_all(self):
         """ Predict ratings for every user and item. """
@@ -155,4 +156,50 @@ class ExplicitMF():
                 print ('Test mse: ' + str(self.test_mse[-1]))
             iter_diff = n_iter        
     
+from sklearn.metrics import mean_squared_error
+
+def get_mse(pred, actual):
+    # Ignore nonzero terms.
+    pred = pred[actual.nonzero()].flatten()
+    actual = actual[actual.nonzero()].flatten()
+    return mean_squared_error(pred, actual)
+
+g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
+train=sps.lil_matrix((num_nodes, num_nodes), dtype=np.int8)
+query_budget=5000
+initial=20
+count=0
+while count<initial:
+      x=random.randint(0,num_nodes-1)
+      y=random.randint(0,num_nodes-1)
+      if g.has_node(x) and g.has_node(y): 
+          if  has_path(g,x,y):
+              train[[x],[y]]=1 
+              count=count+1
+
+
+
+test_size=int(num_nodes*0.2)
+reach_test=sps.lil_matrix((test_size, num_nodes), dtype=np.int8)
+
+count=0
+while count<test_size/2:
+      x=random.randint(0,test_size-1)
+      y=random.randint(0,test_size-1)
+      if g.has_node(x) and g.has_node(y): 
+          if (x,y) not in merged and has_path(g,x,y):
+              reach_test[[x],[y]]=1 
+              count=count+1
+
+
+MF_ALS = ExplicitMF(train, n_factors=40, user_reg=0, item_reg=0)   
+iter_array = [1, 2, 5, 10, 25, 50, 100]
+
+MF_ALS.calculate_learning_curve(iter_array, reach_test)
+
+
+
+
+
+
     

@@ -49,14 +49,16 @@ num_traverse=2
 bfs_list=[]
 dfs_list=[]
 sources=[5,3406,3,10,16]
-backbone=True
+backbone=False
 jump_prob=.2
 burning_prob=.4
 ##### input dataset
 time_start = time.perf_counter()
 
 
-g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
+#g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
+
+g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/web-Google.txt", create_using= nx.Graph(),nodetype=int)
 
 #g = nx.karate_club_graph()
 
@@ -154,11 +156,11 @@ while count<query_budget:
            
 if not backbone:
     for i in range(num_traverse):
-        bfs_depth=sorted(list(nx.bfs_tree(g, source=sources[i], depth_limit=depth_limit_search).edges()))
+        bfs_depth=sorted(list(nx.bfs_tree(g, source=sources[i], depth_limit=3).edges()))
         bfs_list.append(bfs_depth)
 else: 
     for i in range(num_traverse):
-        bfs_depth=sorted(list(nx.bfs_tree(g, source=min_vertex[i], depth_limit=depth_limit_search).edges()))
+        bfs_depth=sorted(list(nx.bfs_tree(g, source=min_vertex[i], depth_limit=3).edges()))
         bfs_list.append(bfs_depth)
 
 merged = list(itertools.chain(*bfs_list))
@@ -178,8 +180,9 @@ reach=sps.lil_matrix((num_nodes, num_nodes), dtype=np.int8)
 count=0
 for (i,j) in merged:
     if count<query_budget:
-        reach[i,j]=1
-        count=count+1
+        if i< num_nodes and j < num_nodes:
+            reach[[i],[j]]=1
+            count=count+1
     else:
         break
 
@@ -216,33 +219,46 @@ H1 = model.components_
                        
 HT=np.transpose(H1)
 
-test_size=int(num_nodes*0.2)
+test_size=int(num_nodes*0.002)
 reach_test=sps.lil_matrix((test_size, num_nodes), dtype=np.int8)
+pred=sps.lil_matrix((test_size, num_nodes), dtype=np.int8)
 
+nzeroo=np.argwhere(reach != 0)
 count=0
 while count<test_size/2:
       x=random.randint(0,test_size-1)
       y=random.randint(0,test_size-1)
       if g.has_node(x) and g.has_node(y): 
-          if (x,y) not in merged and has_path(g,x,y):
+          if (x,y) not in nzeroo and has_path(g,x,y):
               reach_test[[x],[y]]=1 
+              pred[[x],[y]]=W1[x].dot(HT[y])
+              #print(W1[x].dot(HT[y]))
               count=count+1
               
-nzeroo=np.argwhere(reach != 0)
-
-reach_minVertex
 count=0
 while count<test_size/2:
       x=random.randint(0,test_size-1)
       y=random.randint(0,test_size-1)
       if  g.has_node(x) and g.has_node(y): 
           if [[x],[y]] not in nzeroo:
-              reach_test[[x],[y]]=1 
+              reach_test[[x],[y]]=0
+              pred[[x],[y]]=W1[x].dot(HT[y])
               count=count+1              
-          
-          
-#X_train, X_test = model_selection.train_test_split(reach, test_size=0.2, random_state=1)
+               
+              
 
+pred_arr=pred.toarray()
+reach_test_dense=reach_test.toarray()
+from sklearn.metrics import mean_squared_error
+mean_squared_error(reach_test_dense, pred_arr)
+scorer=metrics.explained_variance_score
+scorer(reach_test_dense, pred_arr)
+
+      
+          
+mse = sklearn.metrics.mean_squared_error(actual, predicted)
+
+rmse = math.sqrt(mse)
 
 def get_score(model, data, scorer=metrics.explained_variance_score):
     """ Estimate performance of the model on the data """
@@ -257,7 +273,7 @@ print(get_score(nmf, reach_test_dense))
 
 
 
-
+prediction = nmf.inverse_transform(model.transform(reach_test_dense))
 
 ################# predict paths
 pos={}
