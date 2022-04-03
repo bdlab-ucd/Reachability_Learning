@@ -27,7 +27,6 @@ import math
 import random
 import numpy as np
 import copy
-## SVD
 import seaborn as sns
 import networkx as nx
 from sklearn.decomposition import NMF
@@ -40,7 +39,7 @@ import os
 
 
 ## set input parameters 
-query_budget=10000
+query_budget=100000000
 rank=64
 depth_limit_search=4
 source_node=5
@@ -105,9 +104,9 @@ def get_result (reach):
 
 
 #'web-Google.txt','soc-LiveJournal1.txt','cit-patent.edges'
-for dataa in ['blog.txt']:
+for dataa in ['soc-LiveJournal1.txt']:
     sources=[]
-    g = nx.read_edgelist("./Reachability_Learning/dataset/"+dataa, create_using= nx.Graph(),nodetype=int)
+    g = nx.read_edgelist("./Reachability_Learning/dataset/"+dataa, create_using= nx.DiGraph(),nodetype=int)
     highdegree=sorted(g.degree, key=lambda x: x[1], reverse=True)
     sources.append(highdegree[0][0])
     sources.append(highdegree[1][0])
