@@ -35,13 +35,12 @@ import math
 import random
 import numpy as np
 import copy
-## SVD
 import seaborn as sns
 import networkx as nx
 
 from sklearn.decomposition import NMF
 ## set input parameters 
-query_budget=5000
+query_budget=500000000
 rank=16
 depth_limit_search=3
 source_node=5
@@ -56,11 +55,7 @@ burning_prob=.4
 time_start = time.perf_counter()
 
 
-#g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/fb.txt", create_using= nx.Graph(),nodetype=int)
-
-g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/web-Google.txt", create_using= nx.Graph(),nodetype=int)
-
-#g = nx.karate_club_graph()
+g = nx.read_edgelist("./Documents/notes/code_reachability/Reachability_Learning/dataset/web-Google.txt", create_using= nx.DiGraph(),nodetype=int)
 
 num_edges=g.number_of_edges()
 num_nodes=g.number_of_nodes()
